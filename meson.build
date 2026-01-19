@@ -6,9 +6,14 @@ project('funnel-test', 'c',
 pkg = import('pkgconfig')
 
 native = get_option('native')
+static_pipewire = get_option('static_pipewire')
 
 includes = include_directories('include')
-pipewire = dependency('libpipewire-0.3', native: native)
+if static_pipewire
+    pipewire = dependency('libpipewire-static-0.3', native: native, static: true)
+else
+    pipewire = dependency('libpipewire-0.3', native: native)
+endif
 gbm = dependency('gbm', native: native)
 drm = dependency('libdrm', native: native)
 
@@ -31,17 +36,19 @@ funnel = declare_dependency(
     include_directories: includes
 )
 
-install_headers(
-    'include/funnel.h',
-    'include/funnel-gbm.h',
-    subdir : 'funnel')
+if not native
+    install_headers(
+        'include/funnel.h',
+        'include/funnel-gbm.h',
+        subdir : 'funnel')
 
-pkg.generate(libraries : lib_funnel,
-             subdirs : 'funnel',
-             version : meson.project_version(),
-             name : 'libfunnel',
-             filebase : 'libfunnel',
-             description : 'PipeWire video sharing made easy')
+    pkg.generate(libraries : lib_funnel,
+                subdirs : 'funnel',
+                version : meson.project_version(),
+                name : 'libfunnel',
+                filebase : 'libfunnel',
+                description : 'PipeWire video sharing made easy')
+endif
 
 if get_option('egl')
     egl = dependency('egl', native: native)
@@ -56,14 +63,17 @@ if get_option('egl')
     funnel_egl = declare_dependency(
         link_with: lib_funnel_egl,
         include_directories: includes)
-    install_headers('include/funnel-egl.h', subdir : 'funnel')
 
-    pkg.generate(libraries : lib_funnel_egl,
-                 subdirs : 'funnel',
-                 version : meson.project_version(),
-                 name : 'libfunnel-egl',
-                 filebase : 'libfunnel-egl',
-                 description : 'EGL API for libfunnel')
+    if not native
+        install_headers('include/funnel-egl.h', subdir : 'funnel')
+
+        pkg.generate(libraries : lib_funnel_egl,
+                     subdirs : 'funnel',
+                     version : meson.project_version(),
+                     name : 'libfunnel-egl',
+                     filebase : 'libfunnel-egl',
+                     description : 'EGL API for libfunnel')
+    endif
 endif
 
 if get_option('vulkan')
@@ -79,14 +89,17 @@ if get_option('vulkan')
     funnel_vk = declare_dependency(
         link_with: lib_funnel_vk,
         include_directories: includes)
-    install_headers('include/funnel-vk.h', subdir : 'funnel')
 
-    pkg.generate(libraries : lib_funnel_vk,
-                 subdirs : 'funnel',
-                 version : meson.project_version(),
-                 name : 'libfunnel-vk',
-                 filebase : 'libfunnel-vk',
-                 description : 'Vulkan API for libfunnel')
+    if not native
+        install_headers('include/funnel-vk.h', subdir : 'funnel')
+
+        pkg.generate(libraries : lib_funnel_vk,
+                     subdirs : 'funnel',
+                     version : meson.project_version(),
+                     name : 'libfunnel-vk',
+                     filebase : 'libfunnel-vk',
+                     description : 'Vulkan API for libfunnel')
+    endif
 endif
 
 if get_option('test_apps')
