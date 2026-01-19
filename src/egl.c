@@ -98,7 +98,7 @@ int funnel_stream_init_egl(struct funnel_stream *stream, EGLDisplay display) {
     if (!eglQueryDisplayAttribEXT(display, EGL_DEVICE_EXT, &device_attr) ||
         !device_attr) {
         pw_log_error("failed to query EGLDeviceExt");
-        return -EIO;
+        return -ENODEV;
     }
 
     EGLDeviceEXT device = (EGLDeviceEXT *)device_attr;
@@ -111,7 +111,7 @@ int funnel_stream_init_egl(struct funnel_stream *stream, EGLDisplay display) {
 
     if (!render_node) {
         pw_log_error("failed to get device node");
-        return -EIO;
+        return -ENODEV;
     }
 
     fprintf(stderr, "DRM render node: %s\n", render_node);
