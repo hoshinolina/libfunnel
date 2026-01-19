@@ -239,15 +239,27 @@ int main(int argc, char **argv) {
     uint32_t height = 512;
 
     enum funnel_mode mode = FUNNEL_ASYNC;
+    enum funnel_sync sync = FUNNEL_SYNC_EITHER;
 
-    if (argc > 1 && !strcmp(argv[1], "-async"))
-        mode = FUNNEL_ASYNC;
-    if (argc > 1 && !strcmp(argv[1], "-single"))
-        mode = FUNNEL_SINGLE_BUFFERED;
-    if (argc > 1 && !strcmp(argv[1], "-double"))
-        mode = FUNNEL_DOUBLE_BUFFERED;
-    if (argc > 1 && !strcmp(argv[1], "-sync"))
-        mode = FUNNEL_SYNCHRONOUS;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-async"))
+            mode = FUNNEL_ASYNC;
+        else if (!strcmp(argv[i], "-single"))
+            mode = FUNNEL_SINGLE_BUFFERED;
+        else if (!strcmp(argv[i], "-double"))
+            mode = FUNNEL_DOUBLE_BUFFERED;
+        else if (!strcmp(argv[i], "-synchronous"))
+            mode = FUNNEL_SYNCHRONOUS;
+
+        else if (!strcmp(argv[i], "-implicit_sync"))
+            sync = FUNNEL_SYNC_IMPLICIT;
+        else if (!strcmp(argv[i], "-explicit_sync_only"))
+            sync = FUNNEL_SYNC_EXPLICIT_ONLY;
+        else if (!strcmp(argv[i], "-explicit_sync_hybrid"))
+            sync = FUNNEL_SYNC_EXPLICIT_HYBRID;
+        else if (!strcmp(argv[i], "-either_sync"))
+            sync = FUNNEL_SYNC_EITHER;
+    }
 
     do_init(width, height);
 
@@ -266,6 +278,9 @@ int main(int argc, char **argv) {
     assert(ret == 0);
 
     ret = funnel_stream_set_mode(stream, mode);
+    assert(ret == 0);
+
+    ret = funnel_stream_set_sync(stream, sync);
     assert(ret == 0);
 
     ret =
@@ -307,6 +322,15 @@ int main(int argc, char **argv) {
             ret = funnel_buffer_get_egl_image(buf, &image);
             assert(ret == 0);
 
+            if (funnel_buffer_has_sync(buf)) {
+                fprintf(stderr, "[%f] Buffer has sync\n", t);
+                EGLSync acquire;
+                ret = funnel_buffer_get_acquire_egl_sync(buf, &acquire);
+                assert(ret == 0);
+                eglWaitSync(egl_display, acquire, 0);
+                eglDestroySync(egl_display, acquire);
+            }
+
             GLuint color_tex;
             glGenTextures(1, &color_tex);
             glBindTexture(GL_TEXTURE_2D, color_tex);
@@ -326,7 +350,15 @@ int main(int argc, char **argv) {
             glDeleteTextures(1, &color_tex);
             glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER, 0);
 
-            glFlush();
+            if (funnel_buffer_has_sync(buf)) {
+                EGLSync release = eglCreateSync(
+                    egl_display, EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+                ret = funnel_buffer_set_release_egl_sync(buf, release);
+                assert(ret == 0);
+                eglDestroySync(egl_display, release);
+            } else {
+                glFlush();
+            }
         }
 
         eglSwapBuffers(egl_display, egl_surface);

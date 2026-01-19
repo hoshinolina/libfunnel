@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 static const struct {
     EGLAttrib fd, offset, pitch, modlo, modhi;
@@ -72,6 +73,7 @@ static const struct funnel_stream_funcs egl_funcs = {
 static PFNEGLQUERYDEVICESTRINGEXTPROC eglQueryDeviceStringEXT;
 static PFNEGLQUERYDISPLAYATTRIBEXTPROC eglQueryDisplayAttribEXT;
 static PFNEGLQUERYDMABUFMODIFIERSEXTPROC eglQueryDmaBufModifiersEXT;
+static PFNEGLDUPNATIVEFENCEFDANDROIDPROC eglDupNativeFenceFDANDROID;
 
 int funnel_stream_init_egl(struct funnel_stream *stream, EGLDisplay display) {
     if (stream->api != API_UNSET)
@@ -89,6 +91,10 @@ int funnel_stream_init_egl(struct funnel_stream *stream, EGLDisplay display) {
         eglQueryDmaBufModifiersEXT =
             (PFNEGLQUERYDMABUFMODIFIERSEXTPROC)eglGetProcAddress(
                 "eglQueryDmaBufModifiersEXT");
+    if (!eglDupNativeFenceFDANDROID)
+        eglDupNativeFenceFDANDROID =
+            (PFNEGLDUPNATIVEFENCEFDANDROIDPROC)eglGetProcAddress(
+                "eglDupNativeFenceFDANDROID");
 
     assert(eglQueryDeviceStringEXT);
     assert(eglQueryDisplayAttribEXT);
@@ -132,7 +138,8 @@ int funnel_stream_init_egl(struct funnel_stream *stream, EGLDisplay display) {
     stream->api = API_EGL;
     stream->api_ctx = display;
 
-    stream->api_supports_explicit_sync = false;
+    if (!eglDupNativeFenceFDANDROID)
+        stream->api_supports_explicit_sync = false;
     stream->api_requires_explicit_sync = false;
 
     return 0;
@@ -236,4 +243,46 @@ int funnel_buffer_get_egl_format(struct funnel_buffer *buf,
         break;
     }
     return 0;
+}
+
+int funnel_buffer_get_acquire_egl_sync(struct funnel_buffer *buf,
+                                       EGLSync *sync) {
+    int fd;
+
+    if (!buf || buf->stream->api != API_EGL)
+        return -EINVAL;
+
+    int ret = funnel_buffer_get_acquire_sync_file(buf, &fd);
+    if (ret < 0)
+        return ret;
+
+    EGLAttrib attributes[] = {EGL_SYNC_NATIVE_FENCE_FD_ANDROID, fd, EGL_NONE};
+
+    *sync = eglCreateSync(buf->stream->api_ctx, EGL_SYNC_NATIVE_FENCE_ANDROID,
+                          attributes);
+    if (*sync == EGL_NO_SYNC) {
+        fprintf(stderr, "Unable to create an acquire EGLSync\n");
+        return -EIO;
+        close(fd);
+    }
+
+    return 0;
+}
+
+int funnel_buffer_set_release_egl_sync(struct funnel_buffer *buf,
+                                       EGLSync sync) {
+
+    if (!buf || buf->stream->api != API_EGL)
+        return -EINVAL;
+
+    int fd = eglDupNativeFenceFDANDROID(buf->stream->api_ctx, sync);
+    if (fd == EGL_NO_NATIVE_FENCE_FD_ANDROID) {
+        fprintf(stderr, "Unable to get the release sync fd, is this an "
+                        "EGL_SYNC_NATIVE_FENCE_ANDROID?\n");
+        return -EINVAL;
+    }
+
+    int ret = funnel_buffer_set_release_sync_file(buf, fd);
+    close(fd);
+    return ret;
 }

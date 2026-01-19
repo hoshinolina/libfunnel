@@ -46,3 +46,26 @@ int funnel_buffer_get_egl_image(struct funnel_buffer *buf, EGLImage *image);
  */
 int funnel_buffer_get_egl_format(struct funnel_buffer *buf,
                                  enum funnel_egl_format *format);
+
+/**
+ * Get the EGLSync for acquiring the buffer.
+ *
+ * The user must wait on this sync object before accessing
+ * the buffer.
+ *
+ * @param buf Buffer
+ * @param sync Output EGLSync (must be destroyed by caller)
+ */
+int funnel_buffer_get_acquire_egl_sync(struct funnel_buffer *buf,
+                                       EGLSync *sync);
+
+/**
+ * Set the EGLSync for releasing the buffer.
+ *
+ * This sync object must be signaled when access to the buffer is complete.
+ * The sync type must be EGL_SYNC_NATIVE_FENCE_ANDROID.
+ *
+ * @param buf Buffer
+ * @param sync EGLSync (borrowed, must be destroyed by caller)
+ */
+int funnel_buffer_set_release_egl_sync(struct funnel_buffer *buf, EGLSync sync);
