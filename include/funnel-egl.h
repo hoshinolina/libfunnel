@@ -22,7 +22,7 @@ int funnel_stream_init_egl(struct funnel_stream *stream, EGLDisplay display);
  * lowest).
  *
  * @param stream Stream
- * @param format `struct funnel_egl_format` format
+ * @param format `enum funnel_egl_format` format
  */
 int funnel_stream_egl_add_format(struct funnel_stream *stream,
                                  enum funnel_egl_format format);

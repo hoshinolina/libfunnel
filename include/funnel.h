@@ -269,8 +269,8 @@ int funnel_stream_return(struct funnel_stream *stream,
  * Get the dimensions of a Funnel buffer.
  *
  * @param buf Buffer
- * @param width Output width
- * @param height Output height
+ * @param pwidth Output width
+ * @param pheight Output height
  */
 void funnel_buffer_get_size(struct funnel_buffer *buf, uint32_t *pwidth,
                             uint32_t *pheight);
