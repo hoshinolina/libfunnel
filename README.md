@@ -66,6 +66,9 @@ funnel_stream_set_size(stream, width, height);
 //                        another process) and want zero added latency.
 funnel_stream_set_mode(stream, FUNNEL_ASYNC);
 
+// Optional: Enable explicit sync support
+funnel_stream_set_sync(stream, FUNNEL_SYNC_EITHER);
+
 // Formats in priority order
 // If you don't want alpha, remove the first line
 // Alternatively, you can just demote it (and make sure you always render
@@ -99,6 +102,14 @@ while (keep_rendering) {
     EGLImage image;
     funnel_buffer_get_egl_image(buf, &image);
 
+    // Explicit sync support
+    if (funnel_buffer_has_sync(buf)) {
+        EGLSync acquire;
+        funnel_buffer_get_acquire_egl_sync(buf, &acquire);
+        eglWaitSync(egl_display, acquire, 0);
+        eglDestroySync(egl_display, acquire);
+    }
+
     // If the size might change, this is how you know the size
     // of this specific buffer you have to render to:
     funnel_buffer_get_size(buf, &width, &height);
@@ -119,7 +130,16 @@ while (keep_rendering) {
     glDeleteTextures(1, &color_tex);
     glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER, 0);
 
-    glFlush();
+    // Explicit sync support
+    if (funnel_buffer_has_sync(buf)) {
+        EGLSync release = eglCreateSync(
+            egl_display, EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+        funnel_buffer_set_release_egl_sync(buf, release);
+        eglDestroySync(egl_display, release);
+    } else {
+        // Required for implicit sync
+        glFlush();
+    }
 
     funnel_stream_enqueue(stream, buf);
 
