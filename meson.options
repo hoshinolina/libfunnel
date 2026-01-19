@@ -1,0 +1,8 @@
+option('native', type : 'boolean', value : false,
+    description: 'Build for the native target')
+option('test_apps', type : 'boolean', value : true,
+    description: 'Build test apps')
+option('egl', type : 'boolean', value : true,
+    description: 'Enable EGL support')
+option('vulkan', type : 'boolean', value : true,
+    description: 'Enable Vulkan support')
