@@ -95,6 +95,7 @@ struct funnel_stream {
     enum funnel_sync_cycle cycle_state;
     int buffers_dequeued;
     struct funnel_buffer *pending_buffer;
+    bool skip_buffer;
 
     struct {
         struct funnel_stream_config config;

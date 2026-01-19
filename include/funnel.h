@@ -257,7 +257,7 @@ int funnel_stream_enqueue(struct funnel_stream *stream,
  * Return a buffer to the pool without enqueueing it.
  *
  * After this call, the buffer is no longer owned by the user and may not be
- * queued again until it is dequeued.
+ * queued again until it is dequeued. This will effectively drop one frame.
  *
  * @param stream Stream
  * @param buf Buffer to return (must have been dequeued)

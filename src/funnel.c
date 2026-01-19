@@ -159,6 +159,11 @@ static void funnel_buffer_free(struct funnel_buffer *buffer) {
     free(buffer);
 }
 
+static inline bool is_buffer_pending(struct funnel_stream *stream) {
+    assert(!(stream->pending_buffer && stream->skip_buffer));
+    return stream->pending_buffer || stream->skip_buffer;
+}
+
 static void on_remove_buffer(void *data, struct pw_buffer *pwbuffer) {
     fprintf(stderr, "on_remove_buffer: %p -> %p\n", pwbuffer,
             pwbuffer->user_data);
@@ -235,6 +240,7 @@ static void reset_buffers(struct funnel_stream *stream) {
         return_buffer(stream, stream->pending_buffer);
         stream->pending_buffer = NULL;
     }
+    stream->skip_buffer = false;
 }
 
 static void on_state_changed(void *data, enum pw_stream_state old,
@@ -475,6 +481,8 @@ static void on_process(void *data) {
         assert(buf->pw_buffer);
         fprintf(stderr, "PROCESS %d QUEUED BUFFER\n", frame);
         pw_stream_queue_buffer(stream->stream, buf->pw_buffer);
+    } else if (stream->skip_buffer) {
+        stream->skip_buffer = false;
     }
 
     pw_thread_loop_signal(stream->ctx->loop, false);
@@ -1070,7 +1078,7 @@ int funnel_stream_dequeue(struct funnel_stream *stream,
         }
 
         if (stream->cur.config.mode == FUNNEL_SINGLE_BUFFERED &&
-            stream->pending_buffer) {
+            is_buffer_pending(stream)) {
             fprintf(stderr, "dequeue: 1B, waiting for pending frame\n");
             unblock_process_thread(stream);
             continue;
@@ -1120,8 +1128,9 @@ int funnel_stream_dequeue(struct funnel_stream *stream,
 
     UNLOCK_RETURN(0);
 }
-int funnel_stream_enqueue(struct funnel_stream *stream,
-                          struct funnel_buffer *buf) {
+static int funnel_stream_enqueue_internal(struct funnel_stream *stream,
+                                          struct funnel_buffer *buf,
+                                          bool valid) {
     if (!stream->stream)
         return -EINVAL;
     if (!buf)
@@ -1156,10 +1165,11 @@ int funnel_stream_enqueue(struct funnel_stream *stream,
         }
 
         if (stream->cur.config.mode == FUNNEL_ASYNC) {
+            assert(valid); // ASYNC handled in funnel_stream_return
             if (stream->pending_buffer)
                 return_buffer(stream, stream->pending_buffer);
             stream->pending_buffer = NULL;
-        } else if (stream->pending_buffer) {
+        } else if (is_buffer_pending(stream)) {
             unblock_process_thread(stream);
             pw_thread_loop_wait(ctx->loop);
             continue;
@@ -1173,14 +1183,25 @@ int funnel_stream_enqueue(struct funnel_stream *stream,
         UNLOCK_RETURN(-ESTALE);
     }
 
-    assert(!stream->pending_buffer);
-    stream->pending_buffer = buf;
+    assert(!is_buffer_pending(stream));
+    if (valid) {
+        stream->pending_buffer = buf;
+    } else {
+        stream->skip_buffer = true;
+        return_buffer(stream, buf);
+    }
     unblock_process_thread(stream);
 
     if (stream->cur.config.mode == FUNNEL_ASYNC)
         pw_stream_trigger_process(stream->stream);
 
     UNLOCK_RETURN(0);
+}
+
+int funnel_stream_enqueue(struct funnel_stream *stream,
+                          struct funnel_buffer *buf) {
+
+    return funnel_stream_enqueue_internal(stream, buf, true);
 }
 
 int funnel_stream_return(struct funnel_stream *stream,
@@ -1194,15 +1215,20 @@ int funnel_stream_return(struct funnel_stream *stream,
     struct funnel_ctx *ctx = stream->ctx;
     pw_thread_loop_lock(ctx->loop);
 
-    assert(stream->buffers_dequeued > 0);
-    assert(buf->dequeued);
-    buf->dequeued = false;
-    stream->buffers_dequeued--;
+    if (stream->cur.config.mode == FUNNEL_ASYNC) {
+        assert(stream->buffers_dequeued > 0);
+        assert(buf->dequeued);
+        buf->dequeued = false;
+        stream->buffers_dequeued--;
 
-    pw_thread_loop_accept(ctx->loop);
-    stream->cycle_state = SYNC_CYCLE_INACTIVE;
+        unblock_process_thread(stream);
 
-    UNLOCK_RETURN(return_buffer(stream, buf));
+        pw_stream_trigger_process(stream->stream);
+
+        UNLOCK_RETURN(return_buffer(stream, buf));
+    } else {
+        UNLOCK_RETURN(funnel_stream_enqueue_internal(stream, buf, false));
+    }
 }
 
 void funnel_buffer_get_size(struct funnel_buffer *buf, uint32_t *width,
