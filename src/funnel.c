@@ -809,13 +809,21 @@ int funnel_stream_gbm_add_format(struct funnel_stream *stream, uint32_t format,
         pw_array_add(&stream->config.formats, sizeof(struct funnel_format));
     assert(fmt);
 
+    bool nonlinear = false;
+    for (int i = 0; i < num_modifiers; i++)
+        if (modifiers[i] != DRM_FORMAT_MOD_LINEAR)
+            nonlinear = true;
+
     fmt->format = format;
     fmt->spa_format = spa_format;
     fmt->modifiers = calloc(num_modifiers, sizeof(uint64_t));
     fmt->num_modifiers = num_modifiers;
     memcpy(fmt->modifiers, modifiers, num_modifiers * sizeof(uint64_t));
-    fprintf(stderr, "modifiers=%p fmt=%p base=%p\n", fmt->modifiers, fmt,
-            stream->config.formats.data);
+    fprintf(stderr, "modifiers=%p fmt=%p base=%p nonlinear=%d\n",
+            fmt->modifiers, fmt, stream->config.formats.data, nonlinear);
+
+    if (nonlinear)
+        stream->config.has_nonlinear_tiling = true;
 
     stream->config_pending = true;
     return 0;
@@ -837,6 +845,7 @@ static void funnel_free_formats(struct pw_array *formats) {
 
 void funnel_stream_clear_formats(struct funnel_stream *stream) {
     funnel_reset_formats(&stream->config.formats);
+    stream->config.has_nonlinear_tiling = false;
 }
 
 static void funnel_copy_formats(struct pw_array *dst, struct pw_array *src) {
@@ -1598,4 +1607,9 @@ static int funnel_stream_export_sync_file(struct funnel_stream *stream,
 
     *fd = args.fd;
     return 0;
+}
+
+bool funnel_buffer_is_efficient_for_rendering(struct funnel_buffer *buf) {
+    return !(buf->stream->cur.config.has_nonlinear_tiling &&
+             gbm_bo_get_modifier(buf->bo) == DRM_FORMAT_MOD_LINEAR);
 }

@@ -364,3 +364,13 @@ void *funnel_buffer_get_user_data(struct funnel_buffer *buf);
  * @param buf Buffer
  */
 bool funnel_buffer_has_sync(struct funnel_buffer *buf);
+
+/**
+ * Return whether a buffer is considered efficient for rendering.
+ *
+ * Buffers are considered efficient when they are not using linear tiling
+ * and non-linear tiling is supported by the GPU driver.
+ *
+ * @param buf Buffer
+ */
+bool funnel_buffer_is_efficient_for_rendering(struct funnel_buffer *buf);

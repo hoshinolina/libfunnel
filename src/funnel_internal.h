@@ -49,6 +49,7 @@ struct funnel_stream_config {
     uint32_t height;
 
     struct pw_array formats;
+    bool has_nonlinear_tiling;
 };
 
 enum funnel_api {
