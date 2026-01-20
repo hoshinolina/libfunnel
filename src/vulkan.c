@@ -506,7 +506,7 @@ int funnel_stream_init_vulkan(struct funnel_stream *stream, VkInstance instance,
     else
         sprintf(render_node, "/dev/dri/card%d", (int)drm_props.renderMinor);
 
-    int gbm_fd = open(render_node, O_RDONLY);
+    int gbm_fd = open(render_node, O_RDWR);
     if (gbm_fd < 0) {
         pw_log_error("failed to open device node %s: %d", render_node, errno);
         return -errno;

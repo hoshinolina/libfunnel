@@ -125,7 +125,7 @@ int funnel_stream_init_egl(struct funnel_stream *stream, EGLDisplay display) {
 
     pw_log_info("DRM render node: %s", render_node);
 
-    int gbm_fd = open(render_node, O_RDONLY);
+    int gbm_fd = open(render_node, O_RDWR);
     if (gbm_fd < 0) {
         pw_log_error("failed to open device node %s: %d", render_node, errno);
         return -errno;
