@@ -126,6 +126,7 @@ struct funnel_stream {
         uint32_t height;
         uint32_t format;
         uint64_t modifier;
+        uint32_t aligned_width;
         uint32_t strides[4];
         uint32_t offsets[4];
     } cur;
@@ -136,6 +137,8 @@ struct funnel_buffer {
     struct pw_buffer *pw_buffer;
     bool dequeued;
     bool driving;
+    uint32_t width;
+    uint32_t height;
     struct gbm_bo *bo;
     int fds[6];
     void *api_buf;

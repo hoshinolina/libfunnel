@@ -115,7 +115,7 @@ static void on_add_buffer(void *data, struct pw_buffer *pwbuffer) {
 
     struct gbm_bo *bo = NULL;
 
-    bo = gbm_bo_create_with_modifiers2(stream->gbm, stream->cur.width,
+    bo = gbm_bo_create_with_modifiers2(stream->gbm, stream->cur.aligned_width,
                                        stream->cur.height, stream->cur.format,
                                        &stream->cur.modifier, 1, flags);
 
@@ -125,6 +125,8 @@ static void on_add_buffer(void *data, struct pw_buffer *pwbuffer) {
     buffer->pw_buffer = pwbuffer;
     buffer->stream = stream;
     buffer->bo = bo;
+    buffer->width = stream->cur.width;
+    buffer->height = stream->cur.height;
 
     buffer->backend_sync = false; // TODO
 
@@ -333,6 +335,29 @@ static bool test_create_dmabuf(struct funnel_stream *stream, uint32_t format,
     stream->cur.height = gbm_bo_get_height(bo);
     assert(stream->cur.width == stream->cur.video_format.size.width);
     assert(stream->cur.height == stream->cur.video_format.size.height);
+
+    if (gbm_bo_get_modifier(bo) == DRM_FORMAT_MOD_LINEAR) {
+        gbm_bo_destroy(bo);
+
+        // Align linear buffers to 64 pixel width (256 bytes for 32-bit format)
+        // for cross-GPU compatibility
+        stream->cur.aligned_width = (stream->cur.width + 63) & ~63;
+
+        const uint64_t mod = DRM_FORMAT_MOD_LINEAR;
+
+        bo = gbm_bo_create_with_modifiers2(
+            stream->gbm, stream->cur.aligned_width, stream->cur.height, format,
+            &mod, 1, flags);
+
+        if (!bo)
+            return false;
+
+        assert(gbm_bo_get_width(bo) == stream->cur.aligned_width);
+        assert(gbm_bo_get_height(bo) == stream->cur.height);
+    } else {
+        stream->cur.aligned_width = stream->cur.width;
+    }
+
     stream->cur.plane_count = gbm_bo_get_plane_count(bo);
     for (int i = 0; i < stream->cur.plane_count; i++) {
         stream->cur.strides[i] = gbm_bo_get_stride_for_plane(bo, i);
@@ -1425,8 +1450,8 @@ int funnel_stream_skip_frame(struct funnel_stream *stream) {
 
 void funnel_buffer_get_size(struct funnel_buffer *buf, uint32_t *width,
                             uint32_t *height) {
-    *width = gbm_bo_get_width(buf->bo);
-    *height = gbm_bo_get_height(buf->bo);
+    *width = buf->width;
+    *height = buf->height;
 }
 
 void funnel_buffer_set_user_data(struct funnel_buffer *buf, void *opaque) {
