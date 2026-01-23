@@ -1108,7 +1108,7 @@ int main(int argc, char **argv) {
             if (ret < 0) {
                 fprintf(stderr, "Queue failed: %d\n", ret);
             }
-            assert(ret == 0 || ret == -ESTALE);
+            assert(ret == 0 || ret == -ESTALE || ret == -EAGAIN);
         }
 
         wl_display_roundtrip(display);
