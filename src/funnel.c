@@ -26,8 +26,8 @@
 
 #include <gbm.h>
 #include <linux/dma-buf.h>
-#include <pipewire/pipewire.h>
 #include <pipewire/log.h>
+#include <pipewire/pipewire.h>
 #include <xf86drm.h>
 
 PW_LOG_TOPIC_STATIC(log_funnel, "funnel.core");
@@ -290,8 +290,7 @@ static void on_state_changed(void *data, enum pw_stream_state old,
                              const char *error_message) {
     struct funnel_stream *stream = data;
 
-    pw_log_info("on_state_changed: %s -> %s %s",
-                pw_stream_state_as_string(old),
+    pw_log_info("on_state_changed: %s -> %s %s", pw_stream_state_as_string(old),
                 pw_stream_state_as_string(state), error_message);
     switch (state) {
     case PW_STREAM_STATE_ERROR:
@@ -302,8 +301,7 @@ static void on_state_changed(void *data, enum pw_stream_state old,
         update_timeouts(stream);
         break;
     case PW_STREAM_STATE_STREAMING:
-        pw_log_info("driving:%d lazy:%d",
-                    pw_stream_is_driving(stream->stream),
+        pw_log_info("driving:%d lazy:%d", pw_stream_is_driving(stream->stream),
                     pw_stream_is_lazy(stream->stream));
         update_timeouts(stream);
         break;

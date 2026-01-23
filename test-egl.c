@@ -131,7 +131,9 @@ void gl_setup_scene(void) {
         0.f, 1.f, 0.0f, 1.f, -1.f, 0.0f, -1.f, -1.f, 0.0f,
     };
     unsigned int indices[] = {
-        0, 1, 2, // first Triangle
+        0,
+        1,
+        2, // first Triangle
     };
 
     unsigned int VBO, VAO, EBO;
