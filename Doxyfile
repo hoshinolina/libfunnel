@@ -18,8 +18,8 @@ GENERATE_DEPRECATEDLIST= NO
 QUIET                  = NO
 WARN_NO_PARAMDOC       = YES
 HAVE_DOT               = NO
-INPUT                  = include docs/index.md
-FILE_PATTERNS          = "*.h" "*.c"
+INPUT                  = include docs
+FILE_PATTERNS          = "*.h" "*.c" "*.md"
 RECURSIVE              = YES
 EXAMPLE_PATH           = demo
 EXAMPLE_PATTERNS       = "*.c" "*.inc"
@@ -40,15 +40,15 @@ SEARCHENGINE           = YES
 GENERATE_LATEX         = NO
 
 TOC_INCLUDE_HEADINGS   = 0
-LAYOUT_FILE            = docs/DoxygenLayout.xml
+LAYOUT_FILE            = doxygen/DoxygenLayout.xml
 
 MACRO_EXPANSION        = YES
 EXPAND_ONLY_PREDEF     = YES
 PREDEFINED             =
-HTML_EXTRA_STYLESHEET  = docs/doxygen-awesome-css/doxygen-awesome.css
-HTML_EXTRA_FILES       = docs/doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js
+HTML_EXTRA_STYLESHEET  = doxygen/doxygen-awesome-css/doxygen-awesome.css
+HTML_EXTRA_FILES       = doxygen/doxygen-awesome-css/doxygen-awesome-darkmode-toggle.js
 HTML_INDEX_NUM_ENTRIES = 100
-HTML_HEADER            = docs/header.html
+HTML_HEADER            = doxygen/header.html
 
 MAX_INITIALIZER_LINES  = 1
 SORT_MEMBER_DOCS       = NO
