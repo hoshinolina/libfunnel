@@ -38,7 +38,7 @@ Note that these requirements do not override the lifetime requirements. For exam
 
 The general design of libfunnel synchronization is roughly that:
 
-* Streams may be created and managed by independent
+* Streams may be created and managed by independent threads
 * Each unique stream must be *configured* by a single thread (or with external locking)
 * Stream data processing (dequeing/enqueuing buffers) may happen in a different thread (or multiple threads, in principle)
 * Stream status (start/stop/skip frame) may also be managed by arbitrary threads
