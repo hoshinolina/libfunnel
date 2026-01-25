@@ -155,6 +155,7 @@ static bool try_format(struct funnel_stream *stream, uint32_t format) {
     EGLint count;
     if (eglQueryDmaBufModifiersEXT(stream->api_ctx, format, 0, NULL, NULL,
                                    &count) != EGL_TRUE) {
+        eglGetError();
         return false;
     }
 
