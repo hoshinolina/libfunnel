@@ -138,6 +138,10 @@ static void on_add_buffer(void *data, struct pw_buffer *pwbuffer) {
         buffer->backend_sync ||
         stream->cur.config.frontend_sync == FUNNEL_SYNC_EXPLICIT;
 
+    // TODO: Implement
+    // https://gitlab.freedesktop.org/pipewire/pipewire/-/issues/4885
+    buf->backend_sync_reliable = false;
+
     assert(buffer->frontend_sync || !buffer->backend_sync);
 
     if (buffer->frontend_sync) {
@@ -267,6 +271,7 @@ static void on_remove_buffer(void *data, struct pw_buffer *pwbuffer) {
                 assert(ret >= 0);
             }
             buffer->pw_buffer = NULL;
+            buffer->stl = NULL;
             pw_log_debug("defer buffer free: %p", buffer);
         }
 
@@ -635,9 +640,8 @@ static void on_process(void *data) {
             buf->stl->release_point = buf->acquire.point;
             pw_log_trace(
                 "Buffer consumer acquire/release points: 0x%x:%lld, 0x%x:%lld",
-                buf->release.handle,
-                (long long)buf->stl->acquire_point, buf->acquire.handle,
-                (long long)buf->stl->release_point);
+                buf->release.handle, (long long)buf->stl->acquire_point,
+                buf->acquire.handle, (long long)buf->stl->release_point);
         }
         pw_stream_queue_buffer(stream->stream, buf->pw_buffer);
         buf->sent_count++;
@@ -1484,6 +1488,21 @@ int funnel_stream_dequeue(struct funnel_stream *stream,
     buf->acquire.queried = false;
     buf->release.queried = false;
     buf->release_sync_file_set = false;
+
+    if (buf->backend_sync && !buf->backend_sync_reliable) {
+        int gbm_fd = gbm_device_get_fd(buf->stream->gbm);
+        int ret = drmSyncobjTimelineWait(
+            gbm_fd, &buf->acquire.handle, &buf->acquire.point, 1, 0,
+            DRM_SYNCOBJ_WAIT_FLAGS_WAIT_AVAILABLE, NULL);
+        if (ret < 0) {
+            pw_log_info("Sync point 0x%x/%lld is not materialized, assuming "
+                        "buffer was dropped.",
+                        buf->acquire.handle, (long long)buf->acquire.point);
+            int ret = drmSyncobjTimelineSignal(gbm_fd, &buf->acquire.handle,
+                                               &buf->acquire.point, 1);
+            assert(ret >= 0);
+        }
+    }
 
     *pbuf = buf;
 

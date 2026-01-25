@@ -153,6 +153,7 @@ struct funnel_buffer {
     void *opaque;
 
     bool backend_sync;
+    bool backend_sync_reliable;
     bool frontend_sync;
     struct funnel_sync_point acquire;
     struct funnel_sync_point release;
