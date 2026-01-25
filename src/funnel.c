@@ -1387,6 +1387,8 @@ int funnel_stream_enqueue(struct funnel_stream *stream,
         return -EINVAL;
     assert(buf->stream == stream);
 
+    struct funnel_ctx *ctx = stream->ctx;
+
     int ret;
 
     if (buf->frontend_sync) {
@@ -1397,10 +1399,12 @@ int funnel_stream_enqueue(struct funnel_stream *stream,
         }
     }
 
+    pw_thread_loop_lock(ctx->loop);
+
     if (stream->funcs && stream->funcs->enqueue_buffer) {
         ret = stream->funcs->enqueue_buffer(buf);
         if (ret < 0)
-            return ret;
+            UNLOCK_RETURN(ret);
     }
 
     if (buf->frontend_sync) {
@@ -1414,7 +1418,7 @@ int funnel_stream_enqueue(struct funnel_stream *stream,
                     "Failed to export sync, did you commmit the timeline "
                     "point? (handle = %d, point=%lld)",
                     buf->release.handle, (long long)buf->release.point);
-                return -errno;
+                UNLOCK_RETURN(-errno);
             }
             assert(fd >= 0);
 
@@ -1431,7 +1435,7 @@ int funnel_stream_enqueue(struct funnel_stream *stream,
         }
     }
 
-    return funnel_stream_enqueue_internal(stream, buf, true);
+    UNLOCK_RETURN(funnel_stream_enqueue_internal(stream, buf, true));
 }
 
 int funnel_stream_return(struct funnel_stream *stream,
