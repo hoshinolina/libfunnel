@@ -98,6 +98,8 @@ struct funnel_stream {
     bool api_requires_explicit_sync;
 
     struct gbm_device *gbm;
+    bool gbm_explicit_sync;
+    bool gbm_implicit_sync;
     bool gbm_timeline_sync;
     bool gbm_timeline_sync_import_export;
     uint32_t dummy_syncobj;

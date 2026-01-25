@@ -762,45 +762,61 @@ int funnel_stream_init_gbm(struct funnel_stream *stream, int gbm_fd) {
     if (!stream->gbm)
         return -EINVAL;
 
+    const char *backend = gbm_device_get_backend_name(stream->gbm);
+    pw_log_info("GBM backend: %s", backend);
+
     stream->gbm_timeline_sync = false;
 
     uint64_t cap;
-    int ret = drmGetCap(fd, DRM_CAP_SYNCOBJ_TIMELINE, &cap);
-    stream->gbm_timeline_sync = cap && !ret;
-    stream->gbm_timeline_sync_import_export = false;
+    int ret = drmGetCap(fd, DRM_CAP_SYNCOBJ, &cap);
+    stream->gbm_explicit_sync = cap && !ret;
+
+    if (stream->gbm_explicit_sync) {
+        int ret = drmGetCap(fd, DRM_CAP_SYNCOBJ_TIMELINE, &cap);
+        stream->gbm_timeline_sync = cap && !ret;
+        stream->gbm_timeline_sync_import_export = false;
 
 #ifdef DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_TIMELINE
-    if (stream->gbm_timeline_sync) {
+        if (stream->gbm_timeline_sync) {
 
-        // Test for DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_TIMELINE support
-        struct drm_syncobj_handle args = {
-            .handle = 0, // invalid
-            .flags = DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_EXPORT_SYNC_FILE |
-                     DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_TIMELINE,
-        };
+            // Test for DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_TIMELINE support
+            struct drm_syncobj_handle args = {
+                .handle = 0, // invalid
+                .flags = DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_EXPORT_SYNC_FILE |
+                         DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_TIMELINE,
+            };
 
-        ret = drmIoctl(fd, DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD, &args);
+            ret = drmIoctl(fd, DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD, &args);
 
-        assert(ret == -1);
-        if (errno == ENOENT) {
-            // Syncobj does not exist, but flags are supported
-            stream->gbm_timeline_sync_import_export = true;
-        } else {
-            // Create a dummy syncobj to use for transfers
-            int ret = drmSyncobjCreate(fd, 0, &stream->dummy_syncobj);
-            assert(ret >= 0);
+            assert(ret == -1);
+            if (errno == ENOENT) {
+                // Syncobj does not exist, but flags are supported
+                stream->gbm_timeline_sync_import_export = true;
+            } else {
+                // Create a dummy syncobj to use for transfers
+                int ret = drmSyncobjCreate(fd, 0, &stream->dummy_syncobj);
+                assert(ret >= 0);
+            }
         }
-    }
 
-    pw_log_info("GBM features: fd=%d timeline_sync=%d, import_export=%d", fd,
-                stream->gbm_timeline_sync,
-                stream->gbm_timeline_sync_import_export);
 #endif
+    }
 
     stream->config.bo_flags = GBM_BO_USE_RENDERING;
     stream->api = API_GBM;
     stream->api_supports_explicit_sync = stream->gbm_timeline_sync;
     stream->api_requires_explicit_sync = false;
+    stream->gbm_implicit_sync = true;
+
+    if (!strcmp(backend, "nvidia"))
+        stream->gbm_implicit_sync = false;
+
+    pw_log_info("GBM features: fd=%d implicit_sync=%d, explicit_sync=%d "
+                "timeline_sync=%d, import_export=%d",
+                fd, stream->gbm_implicit_sync, stream->gbm_explicit_sync,
+                stream->gbm_timeline_sync,
+                stream->gbm_timeline_sync_import_export);
+
     return 0;
 }
 
@@ -1415,6 +1431,7 @@ int funnel_stream_enqueue(struct funnel_stream *stream,
 
     if (buf->frontend_sync) {
         if (!buf->backend_sync && !buf->release_sync_file_set) {
+            assert(stream->gbm_implicit_sync);
             int fd = -1;
 
             ret = funnel_stream_export_sync_file(
@@ -1591,6 +1608,7 @@ int funnel_buffer_set_release_sync_file(struct funnel_buffer *buf, int fd) {
     }
 
     if (!buf->backend_sync) {
+        assert(buf->stream->gbm_implicit_sync);
         struct dma_buf_import_sync_file args = {
             .flags = DMA_BUF_SYNC_WRITE,
             .fd = fd,
