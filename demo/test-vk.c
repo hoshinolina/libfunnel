@@ -595,19 +595,25 @@ void loadShader(const uint32_t *buffer, size_t size, VkShaderModule *module) {
 int main(int argc, char **argv) {
     enum funnel_mode mode = FUNNEL_ASYNC;
     VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+    int iterations = 1;
 
-    if (argc > 1 && !strcmp(argv[1], "-async")) {
-        mode = FUNNEL_ASYNC;
-        presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    } else if (argc > 1 && !strcmp(argv[1], "-single")) {
-        mode = FUNNEL_SINGLE_BUFFERED;
-        presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-    } else if (argc > 1 && !strcmp(argv[1], "-double")) {
-        mode = FUNNEL_DOUBLE_BUFFERED;
-        presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-    } else if (argc > 1 && !strcmp(argv[1], "-synchronous")) {
-        mode = FUNNEL_SYNCHRONOUS;
-        presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-async")) {
+            mode = FUNNEL_ASYNC;
+            presentMode = VK_PRESENT_MODE_FIFO_KHR;
+        } else if (!strcmp(argv[i], "-single")) {
+            mode = FUNNEL_SINGLE_BUFFERED;
+            presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        } else if (!strcmp(argv[i], "-double")) {
+            mode = FUNNEL_DOUBLE_BUFFERED;
+            presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        } else if (!strcmp(argv[i], "-synchronous")) {
+            mode = FUNNEL_SYNCHRONOUS;
+            presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        } else if (!strcmp(argv[i], "-sync_torture")) {
+            iterations = 100;
+            width = height = 1024;
+        }
     }
 
     CHECK_WL_RESULT(display = wl_display_connect(NULL));
@@ -1020,10 +1026,26 @@ int main(int argc, char **argv) {
                     .dstOffsets = {{0, 0, 0}, {bwidth, bheight, 1}},
                 };
 
-                vkCmdBlitImage(element->commandBuffer, element->image,
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region,
-                               VK_FILTER_NEAREST);
+                VkImageSubresourceRange range = {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                };
+
+                VkClearColorValue color = {.float32 = {1., 0., 0., 1.}};
+
+                for (int i = 0; i < iterations; i++) {
+                    vkCmdClearColorImage(element->commandBuffer, image,
+                                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                         &color, 1, &range);
+
+                    vkCmdBlitImage(element->commandBuffer, element->image,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                   &region, VK_FILTER_NEAREST);
+                }
             }
 
             VkImageMemoryBarrier barrier = {
@@ -1082,6 +1104,17 @@ int main(int argc, char **argv) {
 
         CHECK_VK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, submit_fence));
 
+        if (buf) {
+            ret = funnel_stream_enqueue(stream, buf);
+            if (ret < 0)
+                fprintf(stderr, "Queue failed: %d\n", ret);
+            else if (ret != 1)
+                fprintf(stderr,
+                        "Buffer dropped (stream renegotiated or paused)\n");
+
+            assert(ret >= 0);
+        }
+
         VkPresentInfoKHR presentInfo = {0};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.waitSemaphoreCount = 1;
@@ -1109,17 +1142,6 @@ int main(int argc, char **argv) {
         }
 
         currentFrame = (currentFrame + 1) % imageCount;
-
-        if (buf) {
-            ret = funnel_stream_enqueue(stream, buf);
-            if (ret < 0)
-                fprintf(stderr, "Queue failed: %d\n", ret);
-            else if (ret != 1)
-                fprintf(stderr,
-                        "Buffer dropped (stream renegotiated or paused)\n");
-
-            assert(ret >= 0);
-        }
 
         wl_display_roundtrip(display);
     }
