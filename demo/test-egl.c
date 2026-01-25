@@ -313,7 +313,7 @@ int main(int argc, char **argv) {
 
         ret = funnel_stream_dequeue(stream, &buf);
         float t = timef();
-        assert(ret == 0);
+        assert(ret >= 0);
         if (!buf) {
             fprintf(stderr, "[%f] No buffers\n", t);
         } else {
