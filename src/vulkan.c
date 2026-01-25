@@ -30,6 +30,8 @@ struct funnel_vk_buffer {
     VkDeviceMemory mem;
     VkSemaphore acquire;
     VkSemaphore release;
+    VkFence fence;
+    bool fence_queried;
     int last_sync_file;
 };
 
@@ -316,11 +318,20 @@ void funnel_vk_alloc_buffer(struct funnel_buffer *buffer) {
         vkCreateSemaphore(vks->device, &create_release, NULL, &vkbuf->release);
     assert(res == VK_SUCCESS);
 
+    VkFenceCreateInfo create_fence = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+
+    res = vkCreateFence(vks->device, &create_fence, NULL, &vkbuf->fence);
+    assert(res == VK_SUCCESS);
+
     buffer->api_buf = vkbuf;
     assert(funnel_buffer_has_sync(buffer));
 }
 
-static void buffer_wait_idle(struct funnel_vk_buffer *vkbuf) {
+static void buffer_wait_idle(struct funnel_vk_stream *vks,
+                             struct funnel_vk_buffer *vkbuf) {
     if (vkbuf->last_sync_file != -1) {
         struct pollfd pfd = {
             .fd = vkbuf->last_sync_file,
@@ -333,13 +344,19 @@ static void buffer_wait_idle(struct funnel_vk_buffer *vkbuf) {
         close(vkbuf->last_sync_file);
         vkbuf->last_sync_file = -1;
     }
+    VkResult res =
+        vkWaitForFences(vks->device, 1, &vkbuf->fence, 1, UINT64_MAX);
+
+    if (res != VK_SUCCESS)
+        pw_log_error("vkWaitForFences failed for buffer fence");
 }
 
 void funnel_vk_free_buffer(struct funnel_buffer *buffer) {
     struct funnel_vk_stream *vks = buffer->stream->api_ctx;
     struct funnel_vk_buffer *vkbuf = buffer->api_buf;
 
-    buffer_wait_idle(vkbuf);
+    buffer_wait_idle(vks, vkbuf);
+    vkDestroyFence(vks->device, vkbuf->fence, NULL);
     vkDestroySemaphore(vks->device, vkbuf->acquire, NULL);
     vkDestroySemaphore(vks->device, vkbuf->release, NULL);
 
@@ -355,6 +372,12 @@ int funnel_vk_enqueue_buffer(struct funnel_buffer *buf) {
     assert(buf->acquire.queried);
     assert(buf->release.queried);
     assert(vkbuf->last_sync_file == -1);
+
+    if (!vkbuf->fence_queried) {
+        pw_log_error("Fence was not queried. funnel_buffer_get_vk_fence() must "
+                     "be called once for each buffer use.");
+        return -EINVAL;
+    }
 
     // Reset for GBM layer to take over
     buf->release.queried = false;
@@ -373,6 +396,7 @@ int funnel_vk_enqueue_buffer(struct funnel_buffer *buf) {
 
     int ret = funnel_buffer_set_release_sync_file(buf, fd);
     vkbuf->last_sync_file = fd;
+    vkbuf->fence_queried = false;
 
     return ret;
 }
@@ -566,7 +590,7 @@ int funnel_buffer_get_vk_semaphores(struct funnel_buffer *buf,
         return -EBUSY;
 
     // Wait for previous use to be complete
-    buffer_wait_idle(vkbuf);
+    buffer_wait_idle(vks, vkbuf);
 
     int fd;
     int ret = funnel_buffer_get_acquire_sync_file(buf, &fd);
@@ -590,5 +614,30 @@ int funnel_buffer_get_vk_semaphores(struct funnel_buffer *buf,
 
     *acquire = vkbuf->acquire;
     *release = vkbuf->release;
+    return 0;
+}
+
+int funnel_buffer_get_vk_fence(struct funnel_buffer *buf, VkFence *fence) {
+    if (!buf || buf->stream->api != API_VULKAN)
+        return -EINVAL;
+
+    struct funnel_vk_buffer *vkbuf = buf->api_buf;
+    struct funnel_vk_stream *vks = buf->stream->api_ctx;
+
+    // Can only be called once per buffer
+    if (vkbuf->fence_queried)
+        return -EBUSY;
+
+    // Wait for previous use to be complete
+    buffer_wait_idle(vks, vkbuf);
+
+    if (vkResetFences(vks->device, 1, &vkbuf->fence) != VK_SUCCESS) {
+        pw_log_error("vkResetFences failed");
+        return -EIO;
+    }
+
+    vkbuf->fence_queried = true;
+    *fence = vkbuf->fence;
+
     return 0;
 }

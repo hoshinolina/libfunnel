@@ -1060,9 +1060,13 @@ int main(int argc, char **argv) {
         VkSemaphore wait_semaphores[2] = {currentElement->startSemaphore};
         VkSemaphore signal_semaphores[2] = {currentElement->endSemaphore};
 
+        VkFence submit_fence = VK_NULL_HANDLE;
+
         if (buf) {
             ret = funnel_buffer_get_vk_semaphores(buf, &wait_semaphores[1],
                                                   &signal_semaphores[1]);
+            assert(ret == 0);
+            ret = funnel_buffer_get_vk_fence(buf, &submit_fence);
             assert(ret == 0);
         }
 
@@ -1076,7 +1080,7 @@ int main(int argc, char **argv) {
         submitInfo.signalSemaphoreCount = buf ? 2 : 1;
         submitInfo.pSignalSemaphores = signal_semaphores;
 
-        CHECK_VK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+        CHECK_VK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, submit_fence));
 
         VkPresentInfoKHR presentInfo = {0};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;

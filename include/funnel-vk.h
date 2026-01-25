@@ -43,7 +43,8 @@
  *
  * @param stream Stream @borrowed
  * @param instance VkInstance to use for the stream @borrowed-by{stream}
- * @param physical_device VkPhysicalDevice to use for the stream @borrowed-by{stream}
+ * @param physical_device VkPhysicalDevice to use for the stream
+ *                        @borrowed-by{stream}
  * @param device VkDevice to use for the stream @borrowed-by{stream}
  * @return_err
  * @retval -EEXIST The API was already initialized once
@@ -161,4 +162,25 @@ int funnel_buffer_get_vk_format(struct funnel_buffer *buf, VkFormat *pformat,
  * @retval -EIO Failed to import acquire semaphore into Vulkan
  */
 int funnel_buffer_get_vk_semaphores(struct funnel_buffer *buf,
-                                    VkSemaphore *pacquire, VkSemaphore *prelease);
+                                    VkSemaphore *pacquire,
+                                    VkSemaphore *prelease);
+
+/**
+ * Get the VkFence that must be signaled by the queue batch
+ *
+ * The user must pass this fence to vkQueueSubmit() (or similar),
+ * such that it is signaled when all operations on the buffer
+ * are complete. This fence is valid whil the buffer is
+ * dequeued.
+ *
+ * @sync-ext
+ *
+ * @param buf Buffer @borrowed
+ * @param[out] pfence Completion VkFence @borrowed-from{buf}
+ * @return_err
+ * @retval -EINVAL
+ *  * Invalid argument
+ *  * API is not Vulkan
+ * @retval -EBUSY Already called once for this buffer
+ */
+int funnel_buffer_get_vk_fence(struct funnel_buffer *buf, VkFence *pfence);
