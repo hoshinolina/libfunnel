@@ -555,7 +555,10 @@ static void on_param_changed(void *data, uint32_t id,
     pw_log_info("Found prop with %d modifiers, flags=%d", mod_count,
                 mod_prop->flags);
 
-    if (mod_prop->flags & SPA_POD_PROP_FLAG_DONT_FIXATE) {
+    if ((mod_prop->flags & SPA_POD_PROP_FLAG_DONT_FIXATE) ||
+        stream->cur.width != stream->cur.video_format.size.width ||
+        stream->cur.height != stream->cur.video_format.size.height ||
+        stream->cur.format != dmabuf_format) {
         if (!test_create_dmabuf(stream, dmabuf_format, modifiers, mod_count)) {
             pw_log_error("failed to create dmabuf for format 0x%x",
                          dmabuf_format);
@@ -569,19 +572,21 @@ static void on_param_changed(void *data, uint32_t id,
                     stream->cur.plane_count, stream->cur.strides[0],
                     stream->cur.offsets[1]);
 
-        size_t num_formats =
-            pw_array_get_len(&stream->cur.config.formats, struct funnel_format);
+        if (mod_prop->flags & SPA_POD_PROP_FLAG_DONT_FIXATE) {
+            size_t num_formats =
+                pw_array_get_len(&stream->cur.config.formats, struct funnel_format);
 
-        const struct spa_pod **params =
-            calloc(num_formats + 1, sizeof(struct spa_pod *));
+            const struct spa_pod **params =
+                calloc(num_formats + 1, sizeof(struct spa_pod *));
 
-        int num_params = build_formats(stream, true, params);
-        assert(num_params <= (num_formats + 1));
+            int num_params = build_formats(stream, true, params);
+            assert(num_params <= (num_formats + 1));
 
-        stream->cur.ready = false;
-        pw_stream_update_params(stream->stream, params, num_params);
-        free_params(params, num_params);
-        return;
+            stream->cur.ready = false;
+            pw_stream_update_params(stream->stream, params, num_params);
+            free_params(params, num_params);
+            return;
+        }
     }
 
     const int buffertypes = (1 << SPA_DATA_DmaBuf);
