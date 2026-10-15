@@ -106,7 +106,7 @@ static struct xdg_wm_base *shell = NULL;
 static struct xdg_surface *shellSurface = NULL;
 static struct xdg_toplevel *toplevel = NULL;
 static struct zxdg_decoration_manager_v1 *decoration_manager = NULL;
-static struct zxdg_toplevel_decoration_v1 *decoration;
+static struct zxdg_toplevel_decoration_v1 *decoration = NULL;
 static int quit = 0;
 static int readyToResize = 0;
 static int resize = 0;
@@ -630,14 +630,19 @@ int main(int argc, char **argv) {
     CHECK_WL_RESULT(toplevel = xdg_surface_get_toplevel(shellSurface));
     xdg_toplevel_add_listener(toplevel, &toplevelListener, NULL);
 
-    CHECK_WL_RESULT(decoration =
-                        zxdg_decoration_manager_v1_get_toplevel_decoration(
-                            decoration_manager, toplevel));
+    if (decoration_manager) {
+        CHECK_WL_RESULT(decoration =
+                            zxdg_decoration_manager_v1_get_toplevel_decoration(
+                                decoration_manager, toplevel));
+    }
 
     xdg_toplevel_set_title(toplevel, appName);
     xdg_toplevel_set_app_id(toplevel, appName);
-    zxdg_toplevel_decoration_v1_set_mode(
-        decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+
+    if (decoration) {
+        zxdg_toplevel_decoration_v1_set_mode(
+            decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+    }
 
     wl_surface_commit(surface);
     wl_display_roundtrip(display);
