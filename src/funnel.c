@@ -389,6 +389,7 @@ static void return_buffer(struct funnel_stream *stream,
                           struct funnel_buffer *buf) {
     if (!buf->pw_buffer) {
         funnel_buffer_free(buf);
+        return;
     }
 
     int ret = pw_stream_return_buffer(stream->stream, buf->pw_buffer);
